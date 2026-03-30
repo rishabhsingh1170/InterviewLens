@@ -1,0 +1,64 @@
+# ----------------------
+
+# Python (Backend)
+
+# ----------------------
+
+**pycache**/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+
+venv/
+myenv/
+env/
+
+# ----------------------
+
+# Environment variables
+
+# ----------------------
+
+.env
+.env.*
+frontend/.env
+frontend/.env.*
+
+# ----------------------
+
+# Node / Frontend
+
+# ----------------------
+
+node_modules/
+frontend/node_modules/
+dist/
+build/
+
+# ----------------------
+
+# Logs
+
+# ----------------------
+
+*.log
+
+# ----------------------
+
+# OS files
+
+# ----------------------
+
+.DS_Store
+Thumbs.db
+
+# ----------------------
+
+# IDE / Editor
+
+# ----------------------
+
+.vscode/
+.idea/
