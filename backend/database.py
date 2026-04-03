@@ -11,6 +11,7 @@ db = client["interviewlens"]
 user_collection = db.get_collection("users")
 question_Answer_collection = db.get_collection("question_answer")
 session_collection = db.get_collection("sessions")
+score_collection = db.get_collection("scores")
 
 # Send a ping to confirm a successful connection
 try:

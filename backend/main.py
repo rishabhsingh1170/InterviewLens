@@ -1,10 +1,6 @@
-from fastapi import FastAPI, HTTPException
-from routes import auth
+from fastapi import FastAPI
+from routes import auth, interview
 import database
-from models.user_schema import UserCreate, UserLogin, UserResponse
-from models.sesion_schema import SessionCreate, SessionResponse
-from models.question_answer_schema import QuestionsAnswers
-from database import user_collection, question_Answer_collection, session_collection
 
 app = FastAPI()
 
@@ -18,3 +14,4 @@ def home():
 #-----------------------------------------------------------#
 
 app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
+app.include_router(interview.router, prefix="/interview", tags=["Interview"])

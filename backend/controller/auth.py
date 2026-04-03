@@ -14,6 +14,8 @@ async def signup(user:UserCreate):
         existing_user = await user_collection.find_one({"email": user.email})
         if existing_user:
             raise HTTPException(status_code=400, detail="User already exists")
+    except HTTPException:
+        raise
     except Exception as e:
         print(e)
         raise HTTPException(status_code=500, detail="Error occurred while checking user existence")
@@ -27,7 +29,7 @@ async def signup(user:UserCreate):
 
         token = create_jwt_token(
         {
-            "user_id": str(new_user["_id"]),
+            "user_id": str(result.inserted_id),
             "email": new_user["email"]
         }
     )
@@ -35,6 +37,8 @@ async def signup(user:UserCreate):
             user=UserResponse(**new_user),
             access_token=token
         )
+    except HTTPException:
+        raise
     except Exception as e:
         print(e)
         raise HTTPException(status_code=500, detail="Error occurred while creating user")
@@ -49,10 +53,11 @@ async def login(user:UserLogin):
         
         if not verify_password(user.password, is_user_exit["password"]):
             raise HTTPException(status_code=400, detail="Invalid email or password")
+    except HTTPException:
+        raise
     except Exception as e:
         print(e)
         raise HTTPException(status_code=500, detail="Error occurred while checking user existence")  
-    print(is_user_exit)  
     
     # JWT token generation
     token = create_jwt_token(
