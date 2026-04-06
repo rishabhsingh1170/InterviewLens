@@ -4,7 +4,7 @@ from models.sesion_schema import SessionCreate
 from models.question_answer_schema import QuestionsAnswers
 from database import session_collection, question_Answer_collection, user_collection
 from fastapi import HTTPException
-from llm_servies.question_generation import generate_question
+from llm_servies.question_generation import generate_question, generate_score_and_feedback
 
 #create interview session and questions for the session and add session id to user collection, questions id to session collection
 async def create_interview(session, user_id):
@@ -163,3 +163,25 @@ async def save_answer( question_id, user_answer):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail="Error occurred while saving user answer")
+    
+# save score and feedback for a user answer of a question
+async def save_score_and_feedback(question_id):
+    try:
+        "Fetch the question and user answer from the database using question_id"
+        question_doc = await question_Answer_collection.find_one({"_id": ObjectId(question_id)})
+        if not question_doc:
+            raise HTTPException(status_code=404, detail="Question not found")
+
+        result = await generate_score_and_feedback({
+            "question_id": question_id,
+            "question": question_doc.get("question", ""),
+            "user_answer": question_doc.get("user_answer", "")
+        })
+        if not result:
+            raise HTTPException(status_code=500, detail="Failed to generate score and feedback")
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(e)
+        raise HTTPException(status_code=500, detail="Error occurred while generating score and feedback")

@@ -25,3 +25,8 @@ async def start_interview(session_id: str, user_id: str = Depends(get_current_us
 @router.post("/save_answer")
 async def save_answer(question_id: str, user_answer: str, user_id: str = Depends(get_current_user)):
     return await interview.save_answer(question_id, user_answer)
+
+#save score and feedback for a user answer of a question
+@router.post("/save_score_feedback")
+async def save_score_and_feedback(question_id: str):
+    return await interview.save_score_and_feedback(question_id)

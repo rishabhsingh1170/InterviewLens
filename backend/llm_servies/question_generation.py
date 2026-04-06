@@ -151,7 +151,6 @@ async def generate_question(interview_topic: str, interview_level: str) -> List[
 
     questions = _parse_questions(content)
 
-    # ✅ Validation
     if not isinstance(questions, list):
         raise ValueError("HuggingFace API Error: Output is not a JSON array")
 
@@ -159,3 +158,88 @@ async def generate_question(interview_topic: str, interview_level: str) -> List[
         raise ValueError(f"HuggingFace API Error: Expected 10 questions, got {len(questions)}")
 
     return questions
+
+# generate score and give ideal answer and feedback for a user answer to a question
+async def generate_score_and_feedback( question_answer: dict) -> dict:
+    question_id = question_answer.get("question_id")
+    question = question_answer.get("question")
+    user_answer = "const is for non contant variable where let is global and var is for constant variable"
+    prompt = f"""
+You are a strict interview evaluator.
+
+First internally evaluate, then return ONLY JSON.
+
+SCORING:
+- 0–1: Incorrect or wrong concepts
+- 2–6: Partial but incomplete
+- 7–8: Mostly correct
+- 9–10: Fully correct
+
+CRITICAL RULES:
+- Any incorrect concept → score MUST be 0–1
+- Missing key points → max score = 6
+- Score 10 ONLY if fully correct
+
+OUTPUT RULES:
+- ONLY valid JSON
+- No extra text
+- Score integer (0–10)
+
+FEEDBACK RULE:
+- Max 12 words
+- One sentence only
+- Must mention the mistake
+
+IDEAL ANSWER RULE:
+- Max 30 words
+- Concise and correct
+- No unnecessary explanation
+
+If output exceeds limits, shorten it.
+
+JSON FORMAT:
+{{
+  "question_id": "{question_id}",
+  "score": <int>,
+  "ideal_answer": "<short answer>",
+  "feedback": "<short feedback>"
+}}
+
+INPUT:
+Question: {question}
+User Answer: {user_answer}
+"""
+    headers = {
+        "Authorization": f"Bearer {HF_API_KEY}",
+        "Content-Type": "application/json"
+    }
+
+    payload = {
+        "model": HF_MODEL,
+        "messages": [
+            {
+                "role": "system",
+                "content": "You are an AI that ONLY returns valid JSON objects."
+            },
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ],
+        "temperature": 0,
+        "top_p": 1,
+        "max_tokens": 300
+    }
+
+    if(not HF_API_KEY):
+        raise ValueError("HuggingFace API Error: Missing HF_API_KEY in environment"
+    )
+    async with httpx.AsyncClient(timeout=30) as client:
+        response = await client.post(API_URL, headers = headers, json = payload)
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            raise ValueError(f"HuggingFace API Error: {e.response.status_code} - {e.response.text}") from e
+        
+        result = response.json()
+        return result
