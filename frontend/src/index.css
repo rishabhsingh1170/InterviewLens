@@ -1,1 +1,26 @@
+@import url("https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&display=swap");
+
+@import "tailwindcss/preflight";
+@import "tailwindcss/utilities";
 @import "tailwindcss";
+/* @plugin "daisyui"; */
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* body {
+  background: #050816;
+} */
+
+.logo{
+  width:25vw;
+  aspect-ratio: 6/1;
+  object-fit: contain;
+}

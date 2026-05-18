@@ -41,3 +41,11 @@ def verify_jwt_token(token: str) -> str:
         raise ValueError("Token has expired")
     except JWTError:
         raise ValueError("Invalid token")
+
+
+# convert audio to text using whisper
+def transcribe_audio(file_path: str) -> str:
+    import whisper
+    model = whisper.load_model("base")
+    result = model.transcribe(file_path)
+    return result["text"]        

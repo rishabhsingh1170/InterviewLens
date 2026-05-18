@@ -6,6 +6,40 @@ from database import session_collection, question_Answer_collection, user_collec
 from fastapi import HTTPException
 from llm_servies.question_generation import generate_question, generate_score_and_feedback
 
+
+async def _fetch_session_with_questions(session_id, user_id):
+    session = await session_collection.find_one({
+        "_id": ObjectId(session_id),
+        "user_id": user_id
+    })
+
+    if not session:
+        raise HTTPException(status_code=404, detail="Interview session not found")
+
+    question_ids = session.get("questions", [])
+    questions = []
+
+    for question_id in question_ids:
+        q = await question_Answer_collection.find_one({"_id": ObjectId(question_id)})
+        if q:
+            questions.append({
+                "question_id": str(q["_id"]),
+                "question": q.get("question", ""),
+                "ideal_answer": q.get("ideal_answer", ""),
+                "user_answer": q.get("user_answer", ""),
+                "score": q.get("score", 0.0),
+                "feedback": q.get("feedback", "")
+            })
+
+    return {
+        "session_id": str(session["_id"]),
+        "topic": session.get("topic", ""),
+        "level": session.get("level", ""),
+        "status": session.get("status", ""),
+        "overall_score": session.get("overall_score", 0.0),
+        "questions": questions
+    }
+
 #create interview session and questions for the session and add session id to user collection, questions id to session collection
 async def create_interview(session, user_id):
     try:
@@ -105,44 +139,26 @@ async def get_sessions(user_id):
 # get all interview questions with questions id of a session and session id for a user    
 async def start_interview(session_id, user_id):
     try:
-        #  fetch session
-        session = await session_collection.find_one({
-            "_id": ObjectId(session_id),
-            "user_id": user_id   # keep consistent with DB (string)
-        })
-
-        if not session:
-            raise HTTPException(status_code=404, detail="Interview session not found")
-
-        question_ids = session.get("questions", [])
-
-        questions = []
-
-        for question_id in question_ids:
-            q = await question_Answer_collection.find_one(
-                {"_id": ObjectId(question_id)}
-            )
-
-            if q:
-                questions.append({
-                    "question_id": str(q["_id"]),   # convert ObjectId
-                    "question": q.get("question", ""),
-                    "ideal_answer": q.get("ideal_answer", ""),
-                    "user_answer": q.get("user_answer", ""),
-                    "score": q.get("score", 0.0),
-                    "feedback": q.get("feedback", "")
-                })
-
-        return {
-            "session_id": session_id,
-            "topic": session.get("topic"),
-            "level": session.get("level"),
-            "questions": questions
-        }
+        interview_data = await _fetch_session_with_questions(session_id, user_id)
+        
+        #check point to check that session is complete or not
+        if interview_data.get("status") == "complete":
+            raise HTTPException(status_code=400, detail="Interview session is already complete")
+        return interview_data
 
     except HTTPException:
         raise
 
+    except Exception as e:
+        print("ERROR:", str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+async def get_session_details(session_id, user_id):
+    try:
+        return await _fetch_session_with_questions(session_id, user_id)
+    except HTTPException:
+        raise
     except Exception as e:
         print("ERROR:", str(e))
         raise HTTPException(status_code=500, detail=str(e))
@@ -165,21 +181,92 @@ async def save_answer( question_id, user_answer):
         raise HTTPException(status_code=500, detail="Error occurred while saving user answer")
     
 # save score and feedback for a user answer of a question
-async def save_score_and_feedback(question_id):
+async def save_score_and_feedback(session_id, user_id):
     try:
-        "Fetch the question and user answer from the database using question_id"
-        question_doc = await question_Answer_collection.find_one({"_id": ObjectId(question_id)})
-        if not question_doc:
-            raise HTTPException(status_code=404, detail="Question not found")
+        interview_data = await start_interview(session_id, user_id)
+        question_docs = interview_data.get("questions", [])
 
-        result = await generate_score_and_feedback({
-            "question_id": question_id,
-            "question": question_doc.get("question", ""),
-            "user_answer": question_doc.get("user_answer", "")
-        })
-        if not result:
-            raise HTTPException(status_code=500, detail="Failed to generate score and feedback")
-        return result
+        if not question_docs:
+            raise HTTPException(status_code=404, detail="Questions not found")
+
+        scoring_input = [
+            {
+                "question_id": question.get("question_id"),
+                "question": question.get("question", ""),
+                "user_answer": question.get("user_answer", "")
+            }
+            for question in question_docs
+            if question.get("question_id")
+        ]
+
+        if not scoring_input:
+            raise HTTPException(status_code=404, detail="Questions not found")
+
+        updated_scores = []
+        total_score = 0.0
+        scored_count = 0
+
+        for question_item in scoring_input:
+            result = await generate_score_and_feedback([question_item])
+            if not result:
+                raise HTTPException(status_code=500, detail="Failed to generate score and feedback")
+
+            if isinstance(result, list):
+                item = next(
+                    (
+                        entry
+                        for entry in result
+                        if entry.get("question_id") == question_item.get("question_id")
+                    ),
+                    result[0],
+                )
+            else:
+                item = result
+
+            question_id = item.get("question_id")
+            if not question_id:
+                question_id = question_item.get("question_id")
+            if not question_id:
+                continue
+
+            update_payload = {}
+
+            if item.get("score") is not None:
+                score_value = float(item.get("score"))
+                update_payload["score"] = score_value
+                total_score += score_value
+                scored_count += 1
+
+            if item.get("ideal_answer") is not None:
+                update_payload["ideal_answer"] = item.get("ideal_answer")
+
+            if item.get("feedback") is not None:
+                update_payload["feedback"] = item.get("feedback")
+
+            if update_payload:
+                update_result = await question_Answer_collection.update_one(
+                    {"_id": ObjectId(question_id)},
+                    {"$set": update_payload}
+                )
+
+                if update_result.matched_count == 0:
+                    raise HTTPException(status_code=404, detail=f"Question not found: {question_id}")
+
+                updated_scores.append({"question_id": question_id, **update_payload})
+
+        overall_score = round(total_score / scored_count, 2) if scored_count else 0.0
+
+        #update overall score and status in session collection
+        await session_collection.update_one(
+            {"_id": ObjectId(session_id), "user_id": user_id},
+            {"$set": {"overall_score": overall_score, "status": "complete"}}
+        )
+
+        return {
+            "session_id": session_id,
+            "overall_score": overall_score,
+            "updated_questions": updated_scores
+        }
     except HTTPException:
         raise
     except Exception as e:
