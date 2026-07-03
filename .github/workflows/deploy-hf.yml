@@ -7,18 +7,15 @@ on:
 
 jobs:
   deploy:
-    permissions:
-      id-token: write
-      contents: read
-
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Push to Hugging Face Space
-        uses: huggingface/hub-action@v1
+      - uses: huggingface/hub-sync@v0.1.0
         with:
-          repo-type: space
-          repo-id: rishabhsingh1170/InterviewLens
+          github_repo_id: ${{ github.repository }}
+          huggingface_repo_id: rishabh1170/InterviewLens
+          repo_type: space
+          space_sdk: docker
+          hf_token: ${{ secrets.HF_TOKEN }}
