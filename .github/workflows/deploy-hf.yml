@@ -1,0 +1,24 @@
+name: Deploy to Hugging Face
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    permissions:
+      id-token: write
+      contents: read
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Push to Hugging Face Space
+        uses: huggingface/hub-action@v1
+        with:
+          repo-type: space
+          repo-id: rishabhsingh1170/InterviewLens
