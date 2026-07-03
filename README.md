@@ -1,3 +1,13 @@
+---
+title: InterviewLens
+emoji: 🎯
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # InterviewLens
 
 InterviewLens is a full-stack interview practice application with a React/Vite frontend and a FastAPI backend. The backend handles authentication, interview APIs, MongoDB persistence, scoring configuration, and Whisper/ffmpeg startup checks.
