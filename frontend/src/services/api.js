@@ -1,4 +1,5 @@
-const API_BASE_URL = "http://localhost:8000";
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
 
 const getAuthHeaders = () => {
   const token = localStorage.getItem("token");
@@ -12,7 +13,7 @@ const getAuthHeaders = () => {
 export const authAPI = {
   signup: async (name, email, password) => {
     const response = await fetch(`${API_BASE_URL}/auth/signup`, {
-      method: "POST",
+      method: "POST", 
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         user_name: name,

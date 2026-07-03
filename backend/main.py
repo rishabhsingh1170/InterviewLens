@@ -3,6 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from routes import auth, interview
 import database
 from controller.utils import ensure_ffmpeg_available
+from fastapi.staticfiles import StaticFiles
+import os
+from pathlib import Path
 
 app = FastAPI()
 
@@ -14,22 +17,41 @@ except Exception as exc:
     print(f"Warning: ffmpeg not ready at startup: {exc}")
 
 # Enable CORS for frontend requests
+origins = [
+    origin.strip()
+    for origin in os.getenv("CORS_ORIGINS", "").split(",")
+    if origin.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:5174", "http://localhost:3000", "http://127.0.0.1:5173", "http://127.0.0.1:5174", "http://127.0.0.1:3000", "*"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-@app.get("/")
-def home():
-    return {"message": "server is running"}
+@app.get("/health")
+def health():
+    return {"status": "ok"}
 
 
 #-----------------------------------------------------------#
 #                         ROUTES                            #
 #-----------------------------------------------------------#
 
-app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
-app.include_router(interview.router, prefix="/interview", tags=["Interview"])
+app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
+app.include_router(interview.router, prefix="/api/interview", tags=["Interview"])
+
+#-----------------------------------------------------------#
+#                   SERVE REACT (Production)
+#-----------------------------------------------------------#
+
+frontend_dir = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+
+if frontend_dir.exists():
+    app.mount(
+        "/",
+        StaticFiles(directory=str(frontend_dir), html=True),
+        name="frontend",
+    )
