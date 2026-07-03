@@ -1,4 +1,7 @@
+import json
+
 from bson import ObjectId
+from bson.errors import InvalidId
 
 from models.sesion_schema import SessionCreate
 from models.question_answer_schema import QuestionsAnswers
@@ -7,9 +10,16 @@ from fastapi import HTTPException
 from llm_servies.question_generation import generate_question, generate_score_and_feedback
 
 
+def _to_object_id(value: str, field_name: str) -> ObjectId:
+    try:
+        return ObjectId(value)
+    except (InvalidId, TypeError) as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid {field_name}") from exc
+
+
 async def _fetch_session_with_questions(session_id, user_id):
     session = await session_collection.find_one({
-        "_id": ObjectId(session_id),
+        "_id": _to_object_id(session_id, "session_id"),
         "user_id": user_id
     })
 
@@ -20,7 +30,7 @@ async def _fetch_session_with_questions(session_id, user_id):
     questions = []
 
     for question_id in question_ids:
-        q = await question_Answer_collection.find_one({"_id": ObjectId(question_id)})
+        q = await question_Answer_collection.find_one({"_id": _to_object_id(question_id, "question_id")})
         if q:
             questions.append({
                 "question_id": str(q["_id"]),
@@ -167,7 +177,7 @@ async def get_session_details(session_id, user_id):
 async def save_answer( question_id, user_answer):
     try:
         result = await question_Answer_collection.update_one(
-            {"_id": ObjectId(question_id)},
+            {"_id": _to_object_id(question_id, "question_id")},
             {"$set": {"user_answer": user_answer}}
         )
 
@@ -207,9 +217,24 @@ async def save_score_and_feedback(session_id, user_id):
         scored_count = 0
 
         for question_item in scoring_input:
-            result = await generate_score_and_feedback([question_item])
+            try:
+                result = await generate_score_and_feedback([question_item])
+            except Exception as exc:
+                print(f"Scoring fallback for question {question_item.get('question_id')}: {exc}")
+                result = [{
+                    "question_id": question_item.get("question_id"),
+                    "score": 0,
+                    "ideal_answer": "",
+                    "feedback": "Scoring unavailable"
+                }]
+
             if not result:
-                raise HTTPException(status_code=500, detail="Failed to generate score and feedback")
+                result = [{
+                    "question_id": question_item.get("question_id"),
+                    "score": 0,
+                    "ideal_answer": "",
+                    "feedback": "Scoring unavailable"
+                }]
 
             if isinstance(result, list):
                 item = next(
@@ -245,7 +270,7 @@ async def save_score_and_feedback(session_id, user_id):
 
             if update_payload:
                 update_result = await question_Answer_collection.update_one(
-                    {"_id": ObjectId(question_id)},
+                    {"_id": _to_object_id(question_id, "question_id")},
                     {"$set": update_payload}
                 )
 
@@ -258,7 +283,7 @@ async def save_score_and_feedback(session_id, user_id):
 
         #update overall score and status in session collection
         await session_collection.update_one(
-            {"_id": ObjectId(session_id), "user_id": user_id},
+            {"_id": _to_object_id(session_id, "session_id"), "user_id": user_id},
             {"$set": {"overall_score": overall_score, "status": "complete"}}
         )
 
@@ -272,3 +297,33 @@ async def save_score_and_feedback(session_id, user_id):
     except Exception as e:
         print(e)
         raise HTTPException(status_code=500, detail="Error occurred while generating score and feedback")
+
+
+async def submit_interview(session_id, answers, user_id):
+    try:
+        interview_data = await _fetch_session_with_questions(session_id, user_id)
+        valid_question_ids = {
+            question["question_id"] for question in interview_data.get("questions", [])
+        }
+
+        for answer in answers:
+            question_id = answer.get("questionId") or answer.get("question_id")
+            user_answer = answer.get("answer", "")
+
+            if not question_id or question_id not in valid_question_ids:
+                continue
+
+            update_result = await question_Answer_collection.update_one(
+                {"_id": _to_object_id(question_id, "question_id")},
+                {"$set": {"user_answer": user_answer}},
+            )
+
+            if update_result.matched_count == 0:
+                raise HTTPException(status_code=404, detail=f"Question not found: {question_id}")
+
+        return await save_score_and_feedback(session_id, user_id)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        print(exc)
+        raise HTTPException(status_code=500, detail="Error occurred while submitting interview")

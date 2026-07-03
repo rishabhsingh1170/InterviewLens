@@ -5,11 +5,20 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 import NavBar from "./components/NavBar";
 import LandingPage from "./pages/landingPage";
 import Dashboard from "./pages/dashboard";
+import Interview from "./pages/interview";
 import Login from "./pages/login";
 import Signup from "./pages/signup";
 
 function AppContent() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#07070f] flex items-center justify-center text-purple-200">
+        Loading...
+      </div>
+    );
+  }
 
   return (
     <div className="pt-[8vh] min-h-screen bg-[#07070f] overflow-hidden">
@@ -26,6 +35,10 @@ function AppContent() {
         <Route
           path="/dashboard"
           element={user ? <Dashboard /> : <Navigate to="/login" replace />}
+        />
+        <Route
+          path="/interview"
+          element={user ? <Interview /> : <Navigate to="/login" replace />}
         />
       </Routes>
     </div>

@@ -2,8 +2,16 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routes import auth, interview
 import database
+from controller.utils import ensure_ffmpeg_available
 
 app = FastAPI()
+
+# Make sure Whisper can find ffmpeg as soon as the app starts.
+try:
+    ffmpeg_path = ensure_ffmpeg_available()
+    print(f"ffmpeg available at: {ffmpeg_path}")
+except Exception as exc:
+    print(f"Warning: ffmpeg not ready at startup: {exc}")
 
 # Enable CORS for frontend requests
 app.add_middleware(
